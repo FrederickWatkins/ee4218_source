@@ -31,14 +31,15 @@
 
 typedef ap_axis<32,0,0,0> AXIS;  //data, user, id, dest
 
-ap_uint<8> mat_data[NUMBER_OF_INPUT_WORDS];
-ap_uint<8> res_data[NUMBER_OF_OUTPUT_WORDS];
-
 void myip_v1_0_HLS(hls::stream<AXIS>& S_AXIS, hls::stream<AXIS>& M_AXIS){
 #pragma HLS INTERFACE ap_ctrl_none port=return
 #pragma HLS INTERFACE axis port=S_AXIS
 #pragma HLS INTERFACE axis port=M_AXIS
-
+    ap_uint<8> mat_A[A_LENGTH];
+    ap_uint<8> mat_B[B_LENGTH];
+    ap_uint<8> res_data[NUMBER_OF_OUTPUT_WORDS];
+#pragma HLS array_partition variable=mat_A cyclic factor=64
+#pragma HLS array_partition variable=mat_B cyclic factor=8
 	int word_cnt;
 	ap_uint<8> sum = 0; // using arbitrary precision
 	//int sum = 0;		 // using 32 bit precision
@@ -48,16 +49,22 @@ void myip_v1_0_HLS(hls::stream<AXIS>& S_AXIS, hls::stream<AXIS>& M_AXIS){
         read_input = S_AXIS.read();
         // read_input is the element (data + other signals) received by our ip through S_AXIS in one clock cycle (which contains one word).
         // read() extracts it from the stream. Overloaded operator >> can also be used.
-        mat_data[word_cnt] = read_input.data;
+        if(word_cnt < A_LENGTH) {
+            mat_A[word_cnt] = read_input.data;
+        } else {
+            mat_B[word_cnt-A_LENGTH] = read_input.data;
+        }
         // We are not making using of S_AXIS_TLAST in this example.
         // S_AXIS_TLAST is required only when we are receiving an unknown number of words.
     }
 
     myip_v1_0_HLS_for2:for(word_cnt = 0; word_cnt < NUMBER_OF_OUTPUT_WORDS; word_cnt++){
+#pragma HLS pipeline
+#pragma HLS unroll factor=8
         int sum = 0;
         myip_v1_0_HLS_for3:for(int col_cnt = 0; col_cnt < A_COLS; col_cnt++) {
-            printf("mat_A value: %i, mat_B value: %i\n", mat_data[word_cnt * A_COLS + col_cnt], mat_data[A_LENGTH + col_cnt]);
-            sum += mat_data[word_cnt * A_COLS + col_cnt] * mat_data[A_LENGTH + col_cnt];
+            printf("mat_A value: %i, mat_B value: %i\n", mat_A[word_cnt * A_COLS + col_cnt], mat_B[col_cnt]);
+            sum += mat_A[word_cnt * A_COLS + col_cnt] * mat_B[col_cnt];
         }
         printf("sum: %i\n", sum);
         sum /= 256;
