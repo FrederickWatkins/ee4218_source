@@ -17,18 +17,18 @@
 
 #define TIMER_COUNTER_0  0
 
-#define WORD_SIZE 4 // Size of words in bytes
+#define WORD_SIZE 1 // Size of words in bytes
 
 #define MAX_PKT_LEN		0x1000
 
 void init();
-void uart_receive_matrix(uint32_t* matrix, size_t len);
-void uart_send_matrix(uint32_t* matrix, size_t len);
-void dma_send_matrix(uint32_t* matrix, size_t len);
-void dma_receive_matrix(uint32_t* matrix, size_t len);
+void uart_receive_matrix(uint8_t* matrix, size_t len);
+void uart_send_matrix(uint8_t* matrix, size_t len);
+void dma_send_matrix(uint8_t* matrix, size_t len);
+void dma_receive_matrix(uint8_t* matrix, size_t len);
 
 // Align to 64-byte cache line boundaries to prevent cache corruption during DMA transfers
-uint32_t mat_send[ROWS * COLS + COLS] __attribute__((aligned(64))) = {
+uint8_t mat_send[ROWS * COLS + COLS] __attribute__((aligned(64))) = {
     160,    129,    104,    71, 184,    193,    55, 86,
     39, 31, 145,    150,    32, 65, 90, 45,
     153,    159,    93, 24, 149,    136,    108,    61,
@@ -106,48 +106,33 @@ uint32_t mat_send[ROWS * COLS + COLS] __attribute__((aligned(64))) = {
 
     
 // Aligning the receive buffer as well, preventing stack cache corruption
-uint32_t mat_res[ROWS] __attribute__((aligned(64))); 
+uint8_t mat_res[ROWS] __attribute__((aligned(64)));
 
 XUartPs Uart_Ps;
 XAxiDma DmaInstance; // Replaced XLlFifo
 XTmrCtr TimerInstance;
 
 int main(void) {
-    uint32_t timestamps[6];
+    uint32_t timestamps[3];
     
     init();
-    Xil_DCacheDisable();
     timestamps[0] = XTmrCtr_GetValue(&TimerInstance, TIMER_COUNTER_0);
-    timestamps[1] = XTmrCtr_GetValue(&TimerInstance, TIMER_COUNTER_0);
     
     dma_receive_matrix(mat_res, ARRAY_LENGTH(mat_res));
     dma_send_matrix(mat_send, ARRAY_LENGTH(mat_send));
-    
-    timestamps[2] = XTmrCtr_GetValue(&TimerInstance, TIMER_COUNTER_0);
 
-    u32 status = XAxiDma_ReadReg(DmaInstance.RegBase +
-                             XAXIDMA_RX_OFFSET,
-                             XAXIDMA_SR_OFFSET);
-
-xil_printf("RX status: 0x%08x\r\n", status);
-
-    
     while(XAxiDma_Busy(&DmaInstance, XAXIDMA_DEVICE_TO_DMA));
     while(XAxiDma_Busy(&DmaInstance, XAXIDMA_DMA_TO_DEVICE));
 
     Xil_DCacheInvalidateRange((UINTPTR)mat_res, ARRAY_LENGTH(mat_res) * WORD_SIZE);
     
-    timestamps[3] = XTmrCtr_GetValue(&TimerInstance, TIMER_COUNTER_0);
-    timestamps[4] = XTmrCtr_GetValue(&TimerInstance, TIMER_COUNTER_0);
+    timestamps[1] = XTmrCtr_GetValue(&TimerInstance, TIMER_COUNTER_0);
     
     uart_send_matrix(mat_res, ARRAY_LENGTH(mat_res));
     
-    timestamps[5] = XTmrCtr_GetValue(&TimerInstance, TIMER_COUNTER_0);
-    xil_printf("Cycles taken to read matrices from uart: %i\r\n", timestamps[1] - timestamps[0]);
-    xil_printf("Cycles taken to write matrices to DMA: %i\r\n", timestamps[2] - timestamps[1]);
-    xil_printf("Cycles taken to read matrices from DMA: %i\r\n", timestamps[3] - timestamps[2]);
-    xil_printf("Cycles taken to calculate matrix multiplication: %i\r\n", timestamps[4] - timestamps[3]);
-    xil_printf("Cycles taken to write matrices to uart: %i\r\n", timestamps[5] - timestamps[4]);
+    timestamps[2] = XTmrCtr_GetValue(&TimerInstance, TIMER_COUNTER_0);
+    xil_printf("Cycles taken to calculate matrix multiplication: %i\r\n", timestamps[1] - timestamps[0]);
+    xil_printf("Cycles taken to write matrices to uart: %i\r\n", timestamps[2] - timestamps[1]);
 }
 
 void init() {
@@ -192,7 +177,7 @@ void init() {
     xil_printf("Successfully initialized\r\n");
 }
 
-void uart_receive_matrix(uint32_t* matrix, size_t len) {
+void uart_receive_matrix(uint8_t* matrix, size_t len) {
     for(size_t i = 0; i < len; i++) {
         char str[16];
         for(size_t j = 0; j < 4; j++) {
@@ -209,13 +194,13 @@ void uart_receive_matrix(uint32_t* matrix, size_t len) {
     }
 }
 
-void uart_send_matrix(uint32_t *matrix, size_t len) {
+void uart_send_matrix(uint8_t *matrix, size_t len) {
     for (size_t i = 0; i < len; i++) {
         xil_printf("%i\r\n", (int)matrix[i]);
     }
 }
 
-void dma_send_matrix(uint32_t *matrix, size_t len) {
+void dma_send_matrix(uint8_t *matrix, size_t len) {
     size_t bytes = len * WORD_SIZE;
     
     // Flush ONLY the specific range we are sending
@@ -225,7 +210,7 @@ void dma_send_matrix(uint32_t *matrix, size_t len) {
     if (status != XST_SUCCESS) return;
 }
 
-void dma_receive_matrix(uint32_t *matrix, size_t len) {
+void dma_receive_matrix(uint8_t *matrix, size_t len) {
     size_t bytes = len * WORD_SIZE;
     
     // Invalidate the range BEFORE the transfer starts 
