@@ -13,8 +13,8 @@ module myip (
     output output_mem_we, // Output memory write enable
     output [7:0] output_mem_data, // Single 8 bit value
 
-    input w_hid [1:0][7:0][7:0], // 8x2 matrix of 8 bit values. Currently column major, you may want to swap
-    input w_out [3:0][7:0] // 3x1 matrix
+    input [1:0][7:0][7:0] w_hid, // 8x2 matrix of 8 bit values. Currently column major, you may want to swap
+    input [3:0][7:0] w_out // 3x1 matrix
 );
 
     // Something along the lines of:
