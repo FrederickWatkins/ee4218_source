@@ -17,6 +17,7 @@
 		output wire memory_we,
 		output wire [5:0] write_row,
 		output wire [7:0][7:0] write_data,
+		output logic writes_done,
 		// User ports ends
 		// Do not modify the ports beyond this line
 
@@ -61,7 +62,6 @@
 
 	reg [bit_num-1:0] write_pointer;
 	// sink has accepted all the streaming data and stored in memory
-	reg writes_done;
 	// I/O Connections assignments
 
 	assign S_AXIS_TREADY	= axis_tready;

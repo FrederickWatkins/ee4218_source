@@ -15,7 +15,9 @@
 	)
 	(
 		// Users to add ports here
-
+		output logic [2:0] read_pointer,
+		input logic [63:0] data_in,
+		input logic start,
 		// User ports ends
 		// Do not modify the ports beyond this line
 
@@ -64,8 +66,6 @@
 	                                     // stream data is output through M_AXIS_TDATA   
 	// State variable                                                                    
 	reg [1:0] mst_exec_state;                                                            
-	// Example design FIFO read pointer                                                  
-	reg [bit_num-1:0] read_pointer;                                                      
 
 	// AXI Stream internal signals
 	//wait counter. The master waits for the user defined number of clock cycles before initiating a transfer.
@@ -110,7 +110,9 @@
 	        // presence of valid streaming data                               
 	        //if ( count == 0 )                                                 
 	        //  begin                                                           
-	            mst_exec_state  <= INIT_COUNTER;                              
+			if (start == 1) begin
+	            mst_exec_state  <= INIT_COUNTER;
+			end
 	        //  end                                                             
 	        //else                                                              
 	        //  begin                                                           
@@ -217,7 +219,7 @@
 	        end                                          
 	      else if (tx_en)// && M_AXIS_TSTRB[byte_index]  
 	        begin                                        
-	          stream_data_out <= read_pointer + 32'b1;   
+	          stream_data_out <= data_in;   
 	        end                                          
 	    end                                              
 

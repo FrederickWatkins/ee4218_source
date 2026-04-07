@@ -3,6 +3,7 @@
 #include "xil_printf.h"
 #include "xaxidma.h"         // Replaced xllfifo.h
 #include "xparameters.h"
+#include "xtmrctr.h"
 #include "xstatus.h"
 #include "xuartps.h"
 #include "myaccel.h"
@@ -10,6 +11,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
+
+#include "soft_impl.h"
 
 #define ARRAY_LENGTH(arr) (sizeof(arr) / sizeof((arr)[0]))
 
@@ -189,18 +192,23 @@ int labels[64] = {
     
 // Aligning the receive buffer as well, preventing stack cache corruption
 uint8_t mat_res[ROWS] __attribute__((aligned(64)));
+uint8_t soft_res[ROWS] __attribute__((aligned(64)));
 bool labels_res[ROWS];
+bool soft_labels[ROWS];
 
 XUartPs Uart_Ps;
 XAxiDma DmaInstance; // Replaced XLlFifo
 MyAccel MyAccelInstance;
+XTmrCtr TimerInstance;
 
 int main(void) {
+    uint32_t timestamps[4];
     init();
     
     myaccel_upload_w_hid(&MyAccelInstance, w_hid);
     myaccel_upload_w_out(&MyAccelInstance, w_out);
     
+    timestamps[0] = XTmrCtr_GetValue(&TimerInstance, TIMER_COUNTER_0);
     dma_receive_matrix(mat_res, ARRAY_LENGTH(mat_res));
     dma_send_matrix(X_data, ARRAY_LENGTH(X_data));
 
@@ -208,6 +216,8 @@ int main(void) {
     while(XAxiDma_Busy(&DmaInstance, XAXIDMA_DMA_TO_DEVICE));
 
     Xil_DCacheInvalidateRange((UINTPTR)mat_res, ARRAY_LENGTH(mat_res) * WORD_SIZE);
+
+    timestamps[1] = XTmrCtr_GetValue(&TimerInstance, TIMER_COUNTER_0);
 
     bool error = false;
     for(int i = 0; i < ROWS; i++) {
@@ -217,13 +227,36 @@ int main(void) {
             error = true;
         }
     }
-    
+
     uart_send_matrix(mat_res, ARRAY_LENGTH(mat_res));
     if(error) {
-        xil_printf("Some values were incorrect\r\n");
+        xil_printf("Some hls values were incorrect\r\n");
     } else {
-        xil_printf("ALL TESTS PASSED\r\n");
+        xil_printf("ALL HLS TESTS PASSED\r\n");
     }
+
+    timestamps[2] = XTmrCtr_GetValue(&TimerInstance, TIMER_COUNTER_0);
+    run_inference(X_data, soft_res, w_hid, w_out);
+    timestamps[3] = XTmrCtr_GetValue(&TimerInstance, TIMER_COUNTER_0);
+    
+    error = false;
+    for(int i = 0; i < ROWS; i++) {
+        soft_labels[i] = soft_res[i] > 128;
+        if(soft_labels[i] != labels[i]) {
+            xil_printf("Labels mismatch at index %i\r\n", i);
+            error = true;
+        }
+    }
+    
+    uart_send_matrix(soft_res, ARRAY_LENGTH(soft_res));
+    if(error) {
+        xil_printf("Some soft values were incorrect\r\n");
+    } else {
+        xil_printf("ALL SOFTWARE TESTS PASSED\r\n");
+    }
+
+    xil_printf("Time for HLS implementation: %i\r\n", timestamps[1] - timestamps[0]);
+    xil_printf("Time for software implementation: %i\r\n", timestamps[3] - timestamps[2]);
 }
 
 void init() {
@@ -258,6 +291,14 @@ void init() {
 			    XAXIDMA_DMA_TO_DEVICE);
 
     MyAccelInstance.baseaddress = (void*)XPAR_MYACCEL_0_BASEADDR;
+
+    XTmrCtr_Config* timer_config = XTmrCtr_LookupConfig(XPAR_XTMRCTR_0_BASEADDR);
+    if(timer_config == NULL) {
+        xil_printf("Failed to acquire timer config");
+        while(1);
+    }
+    XTmrCtr_CfgInitialize(&TimerInstance, timer_config, timer_config->BaseAddress);
+    XTmrCtr_Start(&TimerInstance, TIMER_COUNTER_0);
 
     xil_printf("Successfully initialized\r\n");
 }

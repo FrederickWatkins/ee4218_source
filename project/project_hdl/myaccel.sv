@@ -11,7 +11,7 @@
 
 		// Parameters of Axi Slave Bus Interface S00_AXI
 		parameter integer C_S00_AXI_DATA_WIDTH	= 32,
-		parameter integer C_S00_AXI_ADDR_WIDTH	= 4,
+		parameter integer C_S00_AXI_ADDR_WIDTH	= 5,
 
 		// Parameters of Axi Slave Bus Interface S00_AXIS
 		parameter integer C_S00_AXIS_TDATA_WIDTH	= 64,
@@ -69,11 +69,24 @@
 		input wire  m00_axis_tready
 	);
 
+	logic ip_ready;
+	logic start, done, input_mem_re, input_mem_we, output_mem_re, output_mem_we;
+	logic [5:0] input_mem_read_addr, input_mem_write_addr, output_mem_write_addr;
+	logic [2:0] output_mem_read_addr;
+	logic [7:0][7:0] input_mem_read_data, input_mem_write_data;
+	logic [7:0] output_mem_write_data;
+	logic [63:0] output_mem_read_data;
+	logic [1:0][7:0][7:0] w_hid;
+	logic [2:0][7:0] w_out;
+
+
 // Instantiation of Axi Bus Interface S00_AXI
 	myaccel_slave_lite_v1_0_S00_AXI # ( 
 		.C_S_AXI_DATA_WIDTH(C_S00_AXI_DATA_WIDTH),
 		.C_S_AXI_ADDR_WIDTH(C_S00_AXI_ADDR_WIDTH)
 	) myaccel_slave_lite_v1_0_S00_AXI_inst (
+		.w_hid(w_hid),
+		.w_out(w_out),
 		.S_AXI_ACLK(s00_axi_aclk),
 		.S_AXI_ARESETN(s00_axi_aresetn),
 		.S_AXI_AWADDR(s00_axi_awaddr),
@@ -105,6 +118,7 @@
 		.memory_we(input_mem_we),
 		.write_row(input_mem_write_addr),
 		.write_data(input_mem_write_data),
+		.writes_done(start),
 		.S_AXIS_ACLK(s00_axis_aclk),
 		.S_AXIS_ARESETN(s00_axis_aresetn),
 		.S_AXIS_TREADY(s00_axis_tready),
@@ -119,6 +133,9 @@
 		.C_M_AXIS_TDATA_WIDTH(C_M00_AXIS_TDATA_WIDTH),
 		.C_M_START_COUNT(C_M00_AXIS_START_COUNT)
 	) myaccel_master_stream_v1_0_M00_AXIS_inst (
+		.read_pointer(output_mem_read_addr),
+		.data_in(output_mem_read_data),
+		.start(done),
 		.M_AXIS_ACLK(m00_axis_aclk),
 		.M_AXIS_ARESETN(m00_axis_aresetn),
 		.M_AXIS_TVALID(m00_axis_tvalid),
@@ -129,16 +146,7 @@
 	);
 
 	// Add user logic here
-	logic ip_ready;
-	logic start, done, input_mem_re, input_mem_we, output_mem_re, output_mem_we;
-	logic [5:0] input_mem_read_addr, input_mem_write_addr, output_mem_write_addr;
-	logic [2:0] output_mem_read_addr;
-	logic [7:0][7:0] input_mem_read_data, input_mem_write_data;
-	logic [7:0] output_mem_write_data;
-	logic [63:0] output_mem_read_data;
-	logic [1:0][7:0][7:0] w_hid;
-	logic [3:0][7:0] w_out;
-
+	assign output_mem_re = 1;
 	always @(posedge s00_axi_aclk) begin
 		if(!s00_axi_aresetn) begin
 			ip_ready <= 1'b1;
